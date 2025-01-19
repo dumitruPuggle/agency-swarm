@@ -528,10 +528,7 @@ class Thread:
 
     def _run_until_done(self):
         while self._run.status in ["queued", "in_progress", "cancelling"]:
-            if self.client.base_url == "https://api.openai.com/v1":
-                time.sleep(0.5)
-            else:
-                time.sleep(1)
+            time.sleep(0.5)
 
             self._run = self.client.beta.threads.runs.retrieve(
                 thread_id=self.id, run_id=self._run.id
