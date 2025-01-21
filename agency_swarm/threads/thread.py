@@ -176,8 +176,8 @@ class Thread:
         while True:
             self._run_until_done()
 
-            logger.info(f"Run status: {self._run.status}")
-            logger.info(f"Run object: {self._run.model_dump_json()}")
+            print(f"Run status: {self._run.status}")
+            print(f"Run object: {self._run.model_dump_json()}")
 
             # function execution
             if self._run.status == "requires_action":
