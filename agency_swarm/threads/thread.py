@@ -385,6 +385,10 @@ class Thread:
                 raise Exception(
                     "OpenAI Run Incomplete. Details: ", self._run.incomplete_details
                 )
+            elif self._run.status == "completed":
+                raise Exception(
+                    "Run Completed. Details: ", self._run.model_dump_json()
+                )
             # return assistant message
             else:
                 message_obj = self._get_last_assistant_message()
