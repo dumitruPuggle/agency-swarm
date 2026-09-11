@@ -6,17 +6,17 @@ icon: "code"
 
 ## Feature Overview
 
-API Integrations provide a set of endpoints allowing you to run your agents on custom backends or on other unsupported channels.
+API Integrations provide a set of endpoints allowing you to run your agents on custom backends or on other unsupported channels. This page covers API v2 for integrations connected to a deployed agency.
 
 <Info>
-⚡ Live Postman Example: [Go to Postman →](https://www.postman.com/vrsen-ai/agencii-api/overview)
+Responses stream as **Server-Sent Events (SSE)** by default. Enable **Text Only Mode** in the integration settings to receive only the final answer as plain text.
 </Info>
 
 ---
 
 ## Authentication
 
-- **Note**: You can only use platform tokens for these endpoints. Find or create one inside **Profile Icon > API Keys**.
+- **Note**: You can only use platform tokens for these endpoints. Find or create one inside **Profile Icon > API Keys**. Keep your key on your server.
 - **Headers**:
     - `Authorization`: `Bearer <your_token>`
         - **Example**: `Bearer sk-agencii-H7sb111...`
@@ -28,29 +28,205 @@ API Integrations provide a set of endpoints allowing you to run your agents on c
 
 <CardGroup cols={2}>
 <Card
-  title="Create New Chat"
-  icon="plus"
-  href="/platform/integrations/api/create-new-chat"
+  title="Get Response"
+  icon="bolt"
+  href="/platform/integrations/api/api-reference/get-response"
 >
-  Start a new conversation session.
+  Send a message, stream the reply, and include PDF or image attachments.
 </Card>
 
 <Card
-  title="Get Response"
-  icon="bolt"
-  href="/platform/integrations/api/get-response"
+  title="Get Chat Messages"
+  icon="messages"
+  href="/platform/integrations/api/api-reference/get-chat-messages"
 >
-  Get a response from your agent.
+  Retrieve saved messages, run status, and available files from a conversation.
 </Card>
 </CardGroup>
+
+Completion requests create a chat when needed. You do not need a separate create-chat call.
+
+<Accordion title="Send your first message">
+Create an **API integration**, choose its agency and default agent, and copy the integration ID.
+
+```bash
+export AGENCY_API_KEY="your-platform-api-key"
+export API_V2_BASE_URL="https://api-integration-v2-japboyzddq-uc.a.run.app"
+
+curl --no-buffer --fail-with-body \
+  "$API_V2_BASE_URL/get_completion_v2" \
+  -H "Authorization: Bearer $AGENCY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "apiIntegrationId": "your-integration-id",
+    "message": "Hi! What can you help me with?",
+    "aliasChatId": "customer-123-conversation-1"
+  }'
+```
+
+Use a new `aliasChatId` for each conversation. Reuse it for follow-up messages in that conversation.
+
+<Accordion title="Use the staging environment">
+  Set `API_V2_BASE_URL` to `https://api-integration-v2-qd6wo466iq-uc.a.run.app`. Use an integration ID and platform API key from that environment.
+</Accordion>
+
+</Accordion>
 
 ---
 
 ## Additional Notes
 
-- All timestamps are in ISO 8601 format.
-- Ensure that your `apiIntegrationId` is valid and corresponds to an existing integration.
-- Replace placeholder values with actual data when making requests.
-- The `attachments` parameter in `/get_response` allows you to include files and specify tools for processing.
+- Use a valid `apiIntegrationId` connected to a deployed agency.
+- Reuse `aliasChatId` for follow-up messages in the same conversation. Without a chat identifier, each request starts a new conversation.
+- Use the agent's entry-point ID to override the saved default for a request.
+- Read SSE responses incrementally. Text Only Mode returns plain text; errors before streaming starts return JSON.
+
+<Accordion title="Request fields">
+Send JSON to `POST /get_completion_v2` with `Authorization: Bearer <platform-api-key>`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `apiIntegrationId` | string, required | ID of an API integration connected to an agency. |
+| `message` | string, required | Your message. Send non-empty text, including when attaching a file. |
+| `agent` | string | Entry-point agent ID. Overrides the integration's saved default for this request. |
+| `aliasChatId` | string | Your conversation identifier. Takes precedence over `chatId` for completion requests. |
+| `chatId` | string | Continue a chat by its platform ID. |
+| `attachments` | array | File or image objects, as shown in **Attach a PDF or image**. |
+| `additionalInstructions` | string | Extra instructions for this request. |
+| `user_context` | object or string | Context to pass to the agency, such as a customer ID. |
+
+If `agent` is omitted or empty, the integration uses its saved default. If that setting is missing or stale, it falls back to the first available entry point. An unknown explicit agent ID returns `400`. Use the agent's entry-point ID, which may differ from its display name.
+</Accordion>
+
+<Accordion title="Read the stream">
+The default response has `Content-Type: text/event-stream`. Read it incrementally instead of calling a JSON response parser. This Python example displays the raw SSE lines:
+
+```python
+import os
+
+import requests  # Install with: pip install requests
+
+with requests.post(
+    f"{os.environ['API_V2_BASE_URL']}/get_completion_v2",
+    headers={"Authorization": f"Bearer {os.environ['AGENCY_API_KEY']}"},
+    json={
+        "apiIntegrationId": "your-integration-id",
+        "message": "Explain your role.",
+        "aliasChatId": "customer-123-conversation-1",
+    },
+    stream=True,
+    timeout=(10, 600),
+) as response:
+    response.raise_for_status()
+    response.encoding = "utf-8"
+    if response.headers.get("Content-Type", "").startswith("text/plain"):
+        print(response.text)
+    else:
+        for line in response.iter_lines(decode_unicode=True):
+            print(line, flush=True)
+```
+
+For a UI, use an SSE parser with a streaming POST client. A network chunk can contain part of an event or several events. Native browser `EventSource` cannot send this POST body or its authorization header.
+
+**Event format and response headers**
+  API v2 forwards the agency runtime's SSE stream. The event payload depends on the deployed runtime version. It can include metadata, agent and tool events, wrapped response events, and final messages.
+
+  For example, a text delta from the framework runtime can look like this (other fields omitted):
+
+  ```text
+  data: {"data":{"type":"raw_response_event","data":{"type":"response.output_text.delta","delta":"Hello"}}}
+
+  ```
+
+  The framework runtime can also emit named `meta`, `messages`, and `end` events, with `[DONE]` as the `end` data. Parse complete SSE events, ignore comment/keepalive lines, and handle errors and an interrupted stream. Do not assume that every `data:` payload is text or JSON: `[DONE]` is a marker.
+
+  `X-Run-Id` is forwarded when the upstream runtime supplies it. API v2 also sets `Cache-Control: no-cache` and `X-Accel-Buffering: no` for streaming responses. It does not currently add an `X-Chat-ID` header. Use a known `chatId` or your own `aliasChatId` to continue the conversation.
+</Accordion>
+
+<Accordion title="Return only the answer">
+Enable **Text Only Mode** in the API integration settings, then send the same request. The setting belongs to the integration; sending `textOnly` in the request body does not change the response mode.
+
+The request waits for completion and returns `Content-Type: text/plain; charset=utf-8`:
+
+```text
+Hi! I can help answer questions and work with your documents.
+```
+
+The body contains only the answer, without JSON fields or event framing. With the toggle disabled or unset, the response is SSE. Error responses remain JSON with an error status in both modes.
+</Accordion>
+
+<Accordion title="Attach a PDF or image">
+Add `attachments` to the completion request:
+
+```json
+{
+  "apiIntegrationId": "your-integration-id",
+  "message": "Summarize this PDF and compare it with the chart.",
+  "aliasChatId": "customer-123-conversation-1",
+  "attachments": [
+    {
+      "type": "input_file",
+      "file_url": "https://your-storage.example.com/report.pdf",
+      "filename": "report.pdf"
+    },
+    {
+      "type": "input_image",
+      "image_url": "https://your-storage.example.com/chart.png",
+      "detail": "auto"
+    }
+  ]
+}
+```
+
+Replace the example URLs with files the runtime can download without extra authorization headers. Signed storage URLs work too; keep them valid until the runtime has fetched the files. File interpretation depends on the deployed agent's model and tools.
+
+- **Files:** use `input_file` with an HTTP(S) `file_url`. `filename` is optional and must be a file name without directories. If omitted, it is derived from the URL. Duplicate names receive unique suffixes.
+- **Images:** use `input_image` with an `image_url`. Image URLs and image data URLs are supported. `detail` accepts `auto`, `low`, or `high`; it defaults to `auto`.
+- **Unsupported formats:** OpenAI `file_id`/`tools` objects, inline PDF `file_data`, local file paths, and multipart uploads are not accepted by this JSON endpoint. Upload a local PDF to accessible storage first.
+</Accordion>
+
+<Accordion title="Continue a chat and read its history">
+Completion requests create a chat when needed. Send the same `aliasChatId` or an existing `chatId` with the next message. If neither is supplied, each request starts a new conversation. API v2 does not add a platform chat ID to the completion response.
+
+Retrieve the saved chat with `POST /get_chat_messages`:
+
+```bash
+curl --fail-with-body \
+  "$API_V2_BASE_URL/get_chat_messages" \
+  -H "Authorization: Bearer $AGENCY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "apiIntegrationId": "your-integration-id",
+    "aliasChatId": "customer-123-conversation-1"
+  }'
+```
+
+The JSON response includes the platform `chatId` and saved `items`: user messages, agent messages, tool calls, and other stored item types. It can also include the alias, message count, run status, and download links for available files in persistent agency storage. A history request during generation may not yet include the final answer.
+
+Supply exactly one chat identifier to avoid ambiguity. Completion requests prefer `aliasChatId` when both are provided; history requests prefer `chatId`. History requests require the API key owner to own the integration.
+</Accordion>
+
+<Accordion title="Handle errors">
+Completion errors before streaming starts return JSON containing an `error` message:
+
+| Status | Completion condition |
+| --- | --- |
+| `400` | Invalid JSON/fields/attachments, empty message, unknown explicit agent, or integration not connected to an agency. |
+| `401` | Missing, empty, malformed, or invalid platform API key. |
+| `404` | The integration cannot be found or loaded. |
+| `500` | Server configuration or upstream agent failure before streaming starts. |
+
+The completion endpoint checks the request body and integration before authentication. A malformed request can therefore return `400` or `404` even if its credentials are invalid. After SSE headers are sent, a stream failure cannot change the HTTP status; handle error events and interrupted responses as well as HTTP errors.
+
+History requests return `400` for invalid fields or a missing chat identifier, `401` for invalid credentials, `403` for denied access, and `404` for a missing integration or chat. Use a separate alias for a new conversation; retrying a completion with the same alias can append another user message.
+</Accordion>
 
 ---
+
+<Warning>
+**API v1 is deprecated.** Use API v2 for new integrations. The earlier endpoints use a different server and request format.
+
+Legacy reference: [Create New Chat](/platform/integrations/api/create-new-chat) and [Get Response](/platform/integrations/api/get-response).
+
+[API v1 Postman examples](https://www.postman.com/vrsen-ai/agencii-api/overview)
+</Warning>

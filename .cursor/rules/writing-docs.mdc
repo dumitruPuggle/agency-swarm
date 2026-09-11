@@ -16,6 +16,12 @@ When writing or improving documentation for Agency Swarm, your primary goal is c
 - Hide complexity under tabs, dropdowns, etc.
 - Split pages into sub pages if needed. Use ~150 visible lines as a readability target, not a hard limit. Collapsed content (for example accordions) does not count toward this target.
 
+## Platform API documentation
+
+- Keep one API overview at `docs/platform/integrations/web-api.mdx`, using the existing Feature Overview, Authentication, Endpoints, and Additional Notes layout.
+- Present API v2 as the default. Keep detailed examples in accordions and endpoint contracts in `docs/openapi.json`.
+- Link API v1 only from the deprecated notice at the bottom. Keep its reference pages accessible by URL but hidden from navigation with `x-hidden`.
+
 ## Release Notes
 
 Use these rules for release notes so the intro stays readable and every claim stays tied to a shipped change.

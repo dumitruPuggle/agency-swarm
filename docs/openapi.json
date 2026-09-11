@@ -13,6 +13,7 @@
   ],
   "components": {
     "securitySchemes": {
+      "PlatformApiKey": {"type": "http", "scheme": "bearer", "description": "Platform API key from Profile Icon > API Keys. Send `Authorization: Bearer YOUR_API_KEY`."},
       "BearerAuth": {
         "type": "http",
         "scheme": "bearer",
@@ -21,6 +22,110 @@
       }
     },
     "schemas": {
+      "ApiV2File": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "file_url"],
+        "properties": {
+          "type": {"type": "string", "enum": ["input_file"]},
+          "file_url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?://",
+            "description": "Runtime-accessible HTTP(S) URL. A signed URL is supported; extra request headers are not."
+          },
+          "filename": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "description": "Optional non-blank file name without directory separators. Defaults to the URL file name. Duplicate names receive unique suffixes."
+          }
+        }
+      },
+      "ApiV2Image": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "image_url"],
+        "properties": {
+          "type": {"type": "string", "enum": ["input_image"]},
+          "image_url": {"type": "string", "minLength": 1, "description": "An image URL or image data URL."},
+          "detail": {"type": "string", "enum": ["auto", "low", "high"], "default": "auto"}
+        }
+      },
+      "ApiV2CompletionRequest": {
+        "example": {"apiIntegrationId": "your-integration-id", "message": "Hi!", "aliasChatId": "customer-123-conversation-1"},
+        "type": "object",
+        "required": ["apiIntegrationId", "message"],
+        "properties": {
+          "apiIntegrationId": {"type": "string", "description": "ID of an API integration connected to a deployed agency."},
+          "message": {"type": "string", "minLength": 1, "description": "The user message, including when attachments are supplied."},
+          "agent": {
+            "type": "string",
+            "nullable": true,
+            "description": "Entry-point agent ID, not display name. Overrides the saved default. Missing or empty uses the saved default, then the first available entry point if stale. Unknown explicit IDs return 400."
+          },
+          "chatId": {
+            "type": "string",
+            "nullable": true,
+            "description": "An existing platform chat ID. aliasChatId takes precedence when both are provided."
+          },
+          "aliasChatId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Your conversation ID. Reuse it for follow-up messages. Without either chat identifier a new conversation starts."
+          },
+          "additionalInstructions": {"type": "string", "nullable": true, "description": "Additional instructions for this request."},
+          "user_context": {"oneOf": [{"type": "object", "additionalProperties": true}, {"type": "string"}], "description": "Context to pass to the agency."},
+          "attachments": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "oneOf": [{"$ref": "#/components/schemas/ApiV2File"}, {"$ref": "#/components/schemas/ApiV2Image"}],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {"input_file": "#/components/schemas/ApiV2File", "input_image": "#/components/schemas/ApiV2Image"}
+              }
+            },
+            "description": "JSON file/image attachments. OpenAI file_id/tools, PDF file_data, local paths and multipart uploads are unsupported."
+          }
+        }
+      },
+      "ApiV2Error": {"type": "object", "required": ["error"], "properties": {"error": {"type": "string"}}},
+      "ApiV2HistoryRequest": {
+        "example": {"apiIntegrationId": "your-integration-id", "aliasChatId": "customer-123-conversation-1"},
+        "type": "object",
+        "required": ["apiIntegrationId"],
+        "anyOf": [{"required": ["chatId"]}, {"required": ["aliasChatId"]}],
+        "properties": {
+          "apiIntegrationId": {"type": "string", "description": "API integration ID."},
+          "chatId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Existing platform chat ID. Takes precedence over aliasChatId on this history endpoint."
+          },
+          "aliasChatId": {"type": "string", "minLength": 1, "description": "Conversation alias. Supply one chat identifier."}
+        }
+      },
+      "ApiV2HistoryResponse": {
+        "type": "object",
+        "required": ["chatId", "items"],
+        "properties": {
+          "chatId": {"type": "string"},
+          "aliasChatId": {"type": "string"},
+          "numMessages": {"type": "integer"},
+          "status": {"type": "object", "additionalProperties": true, "description": "Saved run status when available."},
+          "items": {
+            "type": "array",
+            "items": {"type": "object", "additionalProperties": true},
+            "description": "Stored messages, tool calls, reasoning and other chat items. Item structure depends on its type."
+          },
+          "files": {
+            "type": "array",
+            "items": {"type": "object", "properties": {"name": {"type": "string"}, "url": {"type": "string", "format": "uri"}}},
+            "description": "Download links for resolvable persistent agency files. May be empty."
+          }
+        }
+      },
       "Attachment": {
         "type": "object",
         "description": "Object representing a file attachment.",
@@ -115,9 +220,95 @@
   },
   "security": [ { "BearerAuth": [] } ],
   "paths": {
+    "/get_completion_v2": {
+      "servers": [
+        {"url": "https://api-integration-v2-japboyzddq-uc.a.run.app", "description": "Production API v2"},
+        {"url": "https://api-integration-v2-qd6wo466iq-uc.a.run.app", "description": "Staging API v2"}
+      ],
+      "post": {
+        "summary": "Get response",
+        "operationId": "getCompletionV2",
+        "tags": ["API Reference"],
+        "description": "Send a message to an agency-backed integration. Returns raw runtime SSE unless Text Only Mode is enabled in integration settings, in which case it waits and returns text/plain. textOnly is not a request field. Request-body and integration checks precede authentication. The stream may contain wrapped events, metadata, tool events, final messages and [DONE]; do not assume every event is a text delta. See the [API guide](/platform/integrations/web-api) for examples.",
+        "security": [{"PlatformApiKey": []}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2CompletionRequest"}}}},
+        "responses": {
+          "200": {
+            "description": "SSE by default, or a completed plain-text answer when the integration enables Text Only Mode. No platform chat ID is added to the response; retain your chatId/aliasChatId. Once SSE headers are sent, handle stream errors or interruptions even after HTTP 200.",
+            "headers": {
+              "X-Run-Id": {
+                "description": "Forwarded only when supplied by the streaming runtime. Not returned by text-only mode.",
+                "schema": {"type": "string"}
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {"type": "string"},
+                "example": "data: {\"data\":{\"type\":\"raw_response_event\",\"data\":{\"type\":\"response.output_text.delta\",\"delta\":\"Hello\"}}}\n\n"
+              },
+              "text/plain": {"schema": {"type": "string"}, "example": "Hello! How can I help?"}
+            }
+          },
+          "400": {
+            "description": "Invalid body or attachments, empty message, unknown explicit agent, or integration not agency-backed.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2Error"}}}
+          },
+          "401": {
+            "description": "Missing, empty, malformed or invalid platform API key.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2Error"}}}
+          },
+          "404": {
+            "description": "Integration not found or could not be loaded.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2Error"}}}
+          },
+          "500": {
+            "description": "Server configuration failure or upstream failure before streaming starts.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2Error"}}}
+          }
+        }
+      }
+    },
+    "/get_chat_messages": {
+      "servers": [
+        {"url": "https://api-integration-v2-japboyzddq-uc.a.run.app", "description": "Production API v2"},
+        {"url": "https://api-integration-v2-qd6wo466iq-uc.a.run.app", "description": "Staging API v2"}
+      ],
+      "post": {
+        "summary": "Get chat messages",
+        "operationId": "getChatMessages",
+        "tags": ["API Reference"],
+        "description": "Return the saved history for an API chat. Supply exactly one chat identifier; if both are provided, chatId wins. The key owner must own the integration. During generation the final answer may not yet be saved.",
+        "security": [{"PlatformApiKey": []}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2HistoryRequest"}}}},
+        "responses": {
+          "200": {
+            "description": "Saved chat items and available status/file metadata. Null fields are omitted; arrays can be empty.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2HistoryResponse"}}}
+          },
+          "400": {
+            "description": "Invalid request fields or neither chat identifier supplied.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2Error"}}}
+          },
+          "401": {
+            "description": "API key authentication failed.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2Error"}}}
+          },
+          "403": {
+            "description": "Caller does not own the integration or the chat belongs to another integration.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2Error"}}}
+          },
+          "404": {
+            "description": "Integration or chat not found.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiV2Error"}}}
+          }
+        }
+      }
+    },
     "/create_new_chat": {
       "post": {
         "summary": "Create new chat",
+        "deprecated": true,
+        "x-hidden": true,
         "description": "Creates a new chat instance for a user based on a provided API integration. Requires a valid platform token in the headers for authentication. Ensure the apiIntegrationId corresponds to an existing integration.",
         "requestBody": {
           "required": true,
@@ -170,6 +361,8 @@
     "/get_response": {
       "post": {
         "summary": "Get response",
+        "deprecated": true,
+        "x-hidden": true,
         "description": "Processes a message using the specified API integration and returns a response from the agent. Requires a valid platform token. Ensure the apiIntegrationId is valid. Supports continuing existing chats via chatId or aliasChatId and attaching files with tools.",
         "requestBody": {
           "required": true,
