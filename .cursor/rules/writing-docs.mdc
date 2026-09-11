@@ -19,7 +19,7 @@ When writing or improving documentation for Agency Swarm, your primary goal is c
 ## Platform API documentation
 
 - Keep one API overview at `docs/platform/integrations/web-api.mdx`, using the existing Feature Overview, Authentication, Endpoints, and Additional Notes layout.
-- Publish endpoint routes without deployment hostnames or staging environment details. Omit OpenAPI server URLs, use the simple endpoint display, and use `API_BASE_URL` in runnable examples.
+- Show only routes in endpoint bars using the simple endpoint display. Set production-only OpenAPI server URLs for generated code examples; never publish staging URLs or environment selectors. Keep `API_BASE_URL` in the overview examples.
 - Present API v2 as the default. Keep detailed examples in accordions and endpoint contracts in `docs/openapi.json`.
 - Link API v1 only from the deprecated notice at the bottom. Keep its reference pages accessible by URL but hidden from navigation with `x-hidden`.
 
