@@ -85,7 +85,7 @@ Send JSON to `POST /get_completion_v2` with `Authorization: Bearer <platform-api
 | `apiIntegrationId` | string, required | ID of an API integration connected to an agency. |
 | `message` | string, required | Your message. Send non-empty text, including when attaching a file. |
 | `agent` | string | Entry-point agent ID. Overrides the integration's saved default for this request. |
-| `aliasChatId` | string | Your conversation identifier. Takes precedence over `chatId` for completion requests. |
+| `aliasChatId` | string | Your conversation identifier. Do not send it together with `chatId`. |
 | `chatId` | string | Continue a chat by its platform ID. |
 | `attachments` | array | File or image objects, as shown in **Attach a PDF or image**. |
 | `additionalInstructions` | string | Extra instructions for this request. |
@@ -148,7 +148,7 @@ The request waits for completion and returns `Content-Type: text/plain; charset=
 Hi! I can help answer questions and work with your documents.
 ```
 
-The body contains only the answer, without JSON fields or event framing. With the toggle disabled or unset, the response is SSE. Error responses remain JSON with an error status in both modes.
+The body contains only the answer, without JSON fields or event framing. With the toggle disabled or unset, the response is SSE. Errors before streaming starts return JSON with an error status. Once SSE starts, inspect events for errors even when the HTTP status is `200`.
 </Accordion>
 
 <Accordion title="Attach a PDF or image">
@@ -177,7 +177,7 @@ Add `attachments` to the completion request:
 Replace the example URLs with files the runtime can download without extra authorization headers. Signed storage URLs work too; keep them valid until the runtime has fetched the files. File interpretation depends on the deployed agent's model and tools.
 
 - **Files:** use `input_file` with an HTTP(S) `file_url`. `filename` is optional and must be a file name without directories. If omitted, it is derived from the URL. Duplicate names receive unique suffixes.
-- **Images:** use `input_image` with an `image_url`. Image URLs and image data URLs are supported. `detail` accepts `auto`, `low`, or `high`; it defaults to `auto`.
+- **Images:** use `input_image` with an `image_url`. Use an HTTP(S) URL that the runtime can download. Embedded `data:` URLs currently pass API validation but fail in the runtime file uploader; upload the image to accessible storage first. `detail` accepts `auto`, `low`, or `high`; it defaults to `auto`.
 - **Unsupported formats:** OpenAI `file_id`/`tools` objects, inline PDF `file_data`, local file paths, and multipart uploads are not accepted by this JSON endpoint. Upload a local PDF to accessible storage first.
 </Accordion>
 
@@ -199,7 +199,7 @@ curl --fail-with-body \
 
 The JSON response includes the platform `chatId` and saved `items`: user messages, agent messages, tool calls, and other stored item types. It can also include the alias, message count, run status, and download links for available files in persistent agency storage. A history request during generation may not yet include the final answer.
 
-Supply exactly one chat identifier to avoid ambiguity. Completion requests prefer `aliasChatId` when both are provided; history requests prefer `chatId`. History requests require the API key owner to own the integration.
+Supply exactly one chat identifier to avoid ambiguity. Completion requests return `400` if both `aliasChatId` and `chatId` are provided; history requests prefer `chatId`. History requests require the API key owner to own the integration.
 </Accordion>
 
 <Accordion title="Handle errors">

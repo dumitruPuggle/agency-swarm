@@ -43,7 +43,7 @@
         "required": ["type", "image_url"],
         "properties": {
           "type": {"type": "string", "enum": ["input_image"]},
-          "image_url": {"type": "string", "minLength": 1, "description": "An image URL or image data URL."},
+          "image_url": {"type": "string", "minLength": 1, "description": "An HTTP(S) image URL accessible to the runtime. Embedded data URLs pass API validation but are not supported by the current runtime file uploader."},
           "detail": {"type": "string", "enum": ["auto", "low", "high"], "default": "auto"}
         }
       },
@@ -62,7 +62,7 @@
           "chatId": {
             "type": "string",
             "nullable": true,
-            "description": "An existing platform chat ID. aliasChatId takes precedence when both are provided."
+            "description": "An existing platform chat ID. Do not combine with aliasChatId; completion requests return 400 when both are provided."
           },
           "aliasChatId": {
             "type": "string",
