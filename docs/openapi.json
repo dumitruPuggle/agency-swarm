@@ -5,12 +5,6 @@
     "version": "1.0.0",
     "description": "Reference documentation for the Agencii Platform API. Provides endpoints allowing you to run your agents on custom backends or on other unsupported channels. ⚡ Live Postman Example: https://www.postman.com/vrsen-ai/agencii-api/overview"
   },
-  "servers": [
-    {
-      "url": "https://agency-swarm-app-japboyzddq-uc.a.run.app",
-      "description": "Production server"
-    }
-  ],
   "components": {
     "securitySchemes": {
       "PlatformApiKey": {"type": "http", "scheme": "bearer", "description": "Platform API key from Profile Icon > API Keys. Send `Authorization: Bearer YOUR_API_KEY`."},
@@ -221,10 +215,6 @@
   "security": [ { "BearerAuth": [] } ],
   "paths": {
     "/get_completion_v2": {
-      "servers": [
-        {"url": "https://api-integration-v2-japboyzddq-uc.a.run.app", "description": "Production API v2"},
-        {"url": "https://api-integration-v2-qd6wo466iq-uc.a.run.app", "description": "Staging API v2"}
-      ],
       "post": {
         "summary": "Get response",
         "operationId": "getCompletionV2",
@@ -269,10 +259,6 @@
       }
     },
     "/get_chat_messages": {
-      "servers": [
-        {"url": "https://api-integration-v2-japboyzddq-uc.a.run.app", "description": "Production API v2"},
-        {"url": "https://api-integration-v2-qd6wo466iq-uc.a.run.app", "description": "Staging API v2"}
-      ],
       "post": {
         "summary": "Get chat messages",
         "operationId": "getChatMessages",

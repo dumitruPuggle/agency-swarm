@@ -47,14 +47,14 @@ Responses stream as **Server-Sent Events (SSE)** by default. Enable **Text Only 
 Completion requests create a chat when needed. You do not need a separate create-chat call.
 
 <Accordion title="Send your first message">
-Create an **API integration**, choose its agency and default agent, and copy the integration ID.
+Create an **API integration**, choose its agency and default agent, and copy the integration ID. Set `API_BASE_URL` in your environment before running the examples; endpoint paths below are relative to that base URL.
 
 ```bash
 export AGENCY_API_KEY="your-platform-api-key"
-export API_V2_BASE_URL="https://api-integration-v2-japboyzddq-uc.a.run.app"
+: "${API_BASE_URL:?Set API_BASE_URL to your API base URL}"
 
 curl --no-buffer --fail-with-body \
-  "$API_V2_BASE_URL/get_completion_v2" \
+  "$API_BASE_URL/get_completion_v2" \
   -H "Authorization: Bearer $AGENCY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -65,10 +65,6 @@ curl --no-buffer --fail-with-body \
 ```
 
 Use a new `aliasChatId` for each conversation. Reuse it for follow-up messages in that conversation.
-
-<Accordion title="Use the staging environment">
-  Set `API_V2_BASE_URL` to `https://api-integration-v2-qd6wo466iq-uc.a.run.app`. Use an integration ID and platform API key from that environment.
-</Accordion>
 
 </Accordion>
 
@@ -107,7 +103,7 @@ import os
 import requests  # Install with: pip install requests
 
 with requests.post(
-    f"{os.environ['API_V2_BASE_URL']}/get_completion_v2",
+    f"{os.environ['API_BASE_URL']}/get_completion_v2",
     headers={"Authorization": f"Bearer {os.environ['AGENCY_API_KEY']}"},
     json={
         "apiIntegrationId": "your-integration-id",
@@ -192,7 +188,7 @@ Retrieve the saved chat with `POST /get_chat_messages`:
 
 ```bash
 curl --fail-with-body \
-  "$API_V2_BASE_URL/get_chat_messages" \
+  "$API_BASE_URL/get_chat_messages" \
   -H "Authorization: Bearer $AGENCY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
